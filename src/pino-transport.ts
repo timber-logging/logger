@@ -1,5 +1,4 @@
 import { Writable } from 'stream';
-import { getGcloudFunctionAddLogUrl } from '../utils/url-utils';
 
 const colors = {
   default: '\x1b[0m',
@@ -22,16 +21,17 @@ const colorMap: Record<number, string> = {
   10: colors.grey,
 };
 
-interface PinoTransportOptions {
-  logToTimber?: boolean;
-  logToConsol?: boolean;
-  staticLogValues?: Record<string, any>;
+export interface LoggerOptions {
   apiKey?: string;
-  color?: boolean;
+  url?: string;
+  logToTimber?: boolean;
+  logToConsole?: boolean;
+  colorConsole?: boolean;
+  staticLogValues?: Record<string, any>;
 }
 
-export const pinoHttpTransport = (options: PinoTransportOptions = {}) => {
-  const { logToTimber, logToConsol } = options;
+export const pinoHttpTransport = (options: LoggerOptions = {}) => {
+  const { logToTimber, logToConsole } = options;
   const skipFields = [
     'level', 'time', 'pid', 'hostname', 'msg',
     ...Object.keys(options.staticLogValues || {}),
@@ -47,10 +47,10 @@ export const pinoHttpTransport = (options: PinoTransportOptions = {}) => {
         // Ignore JSON parse errors
       }
       try {
-        if (logToConsol === undefined || !!logToConsol) sendToConsol(object, options, skipFields);
+        if (logToConsole === undefined || !!logToConsole) sendToConsol(object, options, skipFields);
         if (logToTimber === undefined || !!logToTimber) await sendLog(object, options);
         callback();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error transporting log:', error);
         callback(error);
       }
@@ -58,14 +58,18 @@ export const pinoHttpTransport = (options: PinoTransportOptions = {}) => {
   });
 };
 
-async function sendLog(logObject: any, options: PinoTransportOptions): Promise<void> {
+async function sendLog(logObject: any, options: LoggerOptions): Promise<void> {
   if (!options.apiKey) {
     console.error('Missing API Key for logging.');
     return;
   }
+  if (!options.url) {
+    console.error('Missing API url for logging.');
+    return;
+  }
 
   const body = JSON.stringify(logObject);
-  const url = getGcloudFunctionAddLogUrl();
+  const url = options.url;
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -80,31 +84,50 @@ async function sendLog(logObject: any, options: PinoTransportOptions): Promise<v
   }
 }
 
-function sendToConsol(logObject: any, options: PinoTransportOptions, skipFields: string[]): void {
-  const messageColor = options.color !== false ? colorMap[logObject.level] || colors.default : '';
-  const contextStr = getContextAsString(logObject, skipFields);
-  const message = typeof logObject !== 'object' ? logObject : logObject.msg;
+function sendToConsol(logObject: any, options: LoggerOptions, skipFields: string[]): void {
+  let messageColor = '';
+  let resetColor = '';
+  if (options.colorConsole === undefined || !!options.colorConsole) {
+    messageColor = colorMap[logObject.level] || colors.default;
+    resetColor = colors.default;
+  }
 
-  let consoleLog = `${messageColor}${message}${colors.default}`;
-  if (contextStr) consoleLog += `\n${indent(contextStr)}`;
-  console.log(consoleLog);
+  const contextStr = getContextAsString(logObject, skipFields);
+  let message = logObject.msg;
+  if (typeof logObject !== 'object') {
+    message = logObject;
+  }
+  let consoleLog = `${messageColor}${message}${resetColor}`;
+  if (contextStr) consoleLog += `\n${indent(contextStr, false)}`;
+  console.log(consoleLog); // DO NOT CHANGE TO LOGGER!!!!!!
 }
 
 function getContextAsString(logObject: any, skipFields: string[]): string {
+  if (typeof logObject !== 'object') return '';
+
+  // Separate Pino fields from custom fields
   return Object.keys(logObject).reduce((str, key) => {
     if (skipFields.includes(key)) return str;
-    const keyValueStr = `${key}: ${indent(getValueAsString(logObject[key]))}`;
-    return str ? `${str}\n${keyValueStr}` : keyValueStr;
+
+    let keyValueStr = `${key}: ${indent(getValueAsString(logObject[key]), true)}`;
+    if (!str) return keyValueStr;
+    return `\n${keyValueStr}`;
   }, '');
 }
 
 function getValueAsString(value: any): string {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === 'object') return JSON.stringify(value, null, 2);
-  return String(value);
+  try {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    return value.toString();
+  } catch (e) {
+    return '[value]';
+  }
 }
 
 function indent(str: string, skipFirstRow = false): string {
-  const indentedStr = str.split('\n').join('\n  ');
-  return skipFirstRow ? indentedStr : `  ${indentedStr}`;
+  if (typeof str !== 'string' || !str) return str;
+  const indentedStr = `${str.split('\n').join('\n  ')}`;
+  if (skipFirstRow) return indentedStr;
+  return `  ${indentedStr}`;
 }

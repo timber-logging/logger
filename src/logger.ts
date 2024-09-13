@@ -1,8 +1,9 @@
-import pino, { Logger, LoggerOptions } from 'pino';
-import { getLoggerOptions } from './get-logger-options';
-import { pinoHttpTransport } from './pino-transport';
+import pino, { LoggerOptions as PinoOptions } from 'pino';
+import { pinoHttpTransport, LoggerOptions } from './pino-transport';
 
-const pinoOptions: LoggerOptions = {
+// Define the structure of the options object
+
+const pinoOptions: PinoOptions = {
   level: 'info',
   customLevels: {
     log: 30, // same as info
@@ -10,13 +11,24 @@ const pinoOptions: LoggerOptions = {
   },
 };
 
-export let logger: Logger;
-reloadLogger(); // initializes the logger
+export class Logger {
+  public logger: pino.Logger;
 
-/**
- * Reloads the logger to load environment variables when running locally.
- */
-export function reloadLogger(): void {
-  const options = getLoggerOptions();
-  logger = pino(pinoOptions, pinoHttpTransport(options)).child(options?.staticLogValues || {});
+  constructor(options: LoggerOptions = {}) {
+    this.logger = pino(pinoOptions, pinoHttpTransport(options)).child(options.staticLogValues || {});
+
+    // Proxy methods directly from pino logger
+    return new Proxy(this, {
+      get(target, prop) {
+        if (prop in target.logger) {
+          return (target.logger as any)[prop];
+        }
+        return (target as any)[prop];
+      }
+    });
+  }
+
+  reload(options: LoggerOptions = {}) {
+    this.logger = pino(pinoOptions, pinoHttpTransport(options)).child(options.staticLogValues || {});
+  }
 }

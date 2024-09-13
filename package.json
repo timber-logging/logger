@@ -1,9 +1,12 @@
 {
-  "name": "timber-logging",
+  "name": "@timber-logging/logger",
   "version": "1.0.0",
   "description": "A logging library using Pino with Timber Logging integration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
