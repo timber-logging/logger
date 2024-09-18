@@ -1,5 +1,5 @@
 import pino, { LoggerOptions as PinoOptions } from 'pino';
-import { pinoHttpTransport, LoggerOptions } from './pino-transport';
+import { pinoHttpTransport, LoggerOptions, waitForLogsToFinish } from './pino-transport';
 
 // Define the structure of the options object
 
@@ -30,5 +30,9 @@ export class Logger {
 
   reload(options: LoggerOptions = {}) {
     this.logger = pino(pinoOptions, pinoHttpTransport(options)).child(options.staticLogValues || {});
+  }
+
+  async waitToFinish(maxWaitMs: number) {
+    return waitForLogsToFinish(maxWaitMs);
   }
 }

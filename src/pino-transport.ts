@@ -1,4 +1,9 @@
 import { Writable } from 'stream';
+import EventEmitter from 'events';
+
+class LogEmitter extends EventEmitter {}
+const logEmitter = new LogEmitter();
+let logsInProgress: number = 0;
 
 const colors = {
   default: '\x1b[0m',
@@ -30,6 +35,17 @@ export interface LoggerOptions {
   staticLogValues?: Record<string, any>;
 }
 
+// Function to wait for all logs to finish
+export async function waitForLogsToFinish(maxWaitTime = 250) {
+  // If no logs are in progress, resolve immediately
+  if (logsInProgress <= 0) return;
+
+  // Wait until all logs are done
+  let timberPromise = new Promise((resolve) => logEmitter.once('timberComplete', resolve));
+
+  await Promise.race([timberPromise, sleep(maxWaitTime)])
+}
+
 export const pinoHttpTransport = (options: LoggerOptions = {}) => {
   const { logToTimber, logToConsole } = options;
   const skipFields = [
@@ -59,47 +75,62 @@ export const pinoHttpTransport = (options: LoggerOptions = {}) => {
 };
 
 async function sendLog(logObject: any, options: LoggerOptions): Promise<void> {
-  if (!options.apiKey) {
-    console.error('Missing API Key for logging.');
-    return;
-  }
-  if (!options.url) {
-    console.error('Missing API url for logging.');
-    return;
-  }
+  try{
+    if (!options.apiKey) {
+      console.error('Missing API Key for logging.');
+      return;
+    }
+    if (!options.url) {
+      console.error('Missing API url for logging.');
+      return;
+    }
 
-  const body = JSON.stringify(logObject);
-  const url = options.url;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${options.apiKey}`,
-    },
-    body,
-  });
+    logsInProgress += 1; // Increment logs in progress
 
-  if (!response.ok) {
-    console.error('Failed to send log to timber:', await response.text());
+    const body = JSON.stringify(logObject);
+    const url = options.url;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${options.apiKey}`,
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      console.error('Failed to send log to timber:', await response.text());
+    }
+  } catch(e: any) {
+    console.error('Error transporting log to timber:', e.message);
+  } finally {
+    logsInProgress -= 1; // Decrement logs in progress after log is sent
+
+    // If no more logs are in progress, emit 'timberComplete'
+    if (logsInProgress <= 0) logEmitter.emit('timberComplete');
   }
 }
 
 function sendToConsol(logObject: any, options: LoggerOptions, skipFields: string[]): void {
-  let messageColor = '';
-  let resetColor = '';
-  if (options.colorConsole === undefined || !!options.colorConsole) {
-    messageColor = colorMap[logObject.level] || colors.default;
-    resetColor = colors.default;
-  }
+  try {
+    let messageColor = '';
+    let resetColor = '';
+    if (options.colorConsole === undefined || !!options.colorConsole) {
+      messageColor = colorMap[logObject.level] || colors.default;
+      resetColor = colors.default;
+    }
 
-  const contextStr = getContextAsString(logObject, skipFields);
-  let message = logObject.msg;
-  if (typeof logObject !== 'object') {
-    message = logObject;
+    const contextStr = getContextAsString(logObject, skipFields);
+    let message = logObject.msg;
+    if (typeof logObject !== 'object') {
+      message = logObject;
+    }
+    let consoleLog = `${messageColor}${message}${resetColor}`;
+    if (contextStr) consoleLog += `\n${indent(contextStr, false)}`;
+    console.log(consoleLog); // DO NOT CHANGE TO LOGGER!!!!!!
+  } catch(e) {
+    console.error(`Failed to log to console`)
   }
-  let consoleLog = `${messageColor}${message}${resetColor}`;
-  if (contextStr) consoleLog += `\n${indent(contextStr, false)}`;
-  console.log(consoleLog); // DO NOT CHANGE TO LOGGER!!!!!!
 }
 
 function getContextAsString(logObject: any, skipFields: string[]): string {
@@ -130,4 +161,13 @@ function indent(str: string, skipFirstRow = false): string {
   const indentedStr = `${str.split('\n').join('\n  ')}`;
   if (skipFirstRow) return indentedStr;
   return `  ${indentedStr}`;
+}
+
+/**
+ * Returns a promise so the program sleeps for the number of miliseconds
+ * @param {number} milliseconds
+ * @returns {Promise}
+ */
+function sleep(milliseconds: number): Promise<any> {
+  return new Promise<void>((resolve) => setTimeout(() => resolve(), milliseconds));
 }
