@@ -1,6 +1,6 @@
 {
   "name": "@timber-logging/logger",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A logging library using Pino with Timber Logging integration",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
