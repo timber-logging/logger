@@ -128,6 +128,12 @@ function logFunction(usePinoFormat: boolean | undefined, pinoLogFn: Function | u
     pinoLogFn(args[0], args[1], ...restOfArgs);
     return;
   }
+  // if first one is undefined, just remove it and log the rest
+  if (typeof args[0] === undefined) {
+    const restOfArgs = args.slice(1);
+    pinoLogFn(...restOfArgs);
+    return;
+  }
 
   // anything else just join with a space
   // if (args.length > 2) { // eg multiple strings, just concatenate
