@@ -1,5 +1,6 @@
 import { Writable } from 'stream';
 import EventEmitter from 'events';
+import { Level } from 'pino';
 
 class LogEmitter extends EventEmitter {}
 const logEmitter = new LogEmitter();
@@ -18,19 +19,21 @@ const colors = {
 
 const colorMap: Record<number, string> = {
   60: colors.red,
+  55: colors.cyan,
   50: colors.red,
-  45: colors.cyan,
   40: colors.yellow,
   30: colors.green,
   20: colors.blue,
   10: colors.grey,
 };
 
-export interface LoggerOptions {
+export interface TimberOptions {
   apiKey?: string;
   url?: string;
   logToTimber?: boolean;
   logToConsole?: boolean;
+  usePinoFormat?: boolean; // pino uses a different format for the logging function, here we can use it
+  logLevel?: Level; // Pino's predefined log levels, use "trace" | "debug" | "info" | "warn" | "error" | "fatal"
   colorConsole?: boolean;
   staticLogValues?: Record<string, any>;
 }
@@ -46,7 +49,7 @@ export async function waitForLogsToFinish(maxWaitTime = 250) {
   await Promise.race([timberPromise, sleep(maxWaitTime)])
 }
 
-export const pinoHttpTransport = (options: LoggerOptions = {}) => {
+export const pinoHttpTransport = (options: TimberOptions = {}) => {
   const { logToTimber, logToConsole } = options;
   const skipFields = [
     'level', 'time', 'pid', 'hostname', 'msg',
@@ -63,7 +66,7 @@ export const pinoHttpTransport = (options: LoggerOptions = {}) => {
         // Ignore JSON parse errors
       }
       try {
-        if (logToConsole === undefined || !!logToConsole) sendToConsol(object, options, skipFields);
+        if (logToConsole === undefined || !!logToConsole) sendToConsole(object, options, skipFields);
         if (logToTimber === undefined || !!logToTimber) await sendLog(object, options);
         callback();
       } catch (error: any) {
@@ -74,13 +77,13 @@ export const pinoHttpTransport = (options: LoggerOptions = {}) => {
   });
 };
 
-async function sendLog(logObject: any, options: LoggerOptions): Promise<void> {
+async function sendLog(logObject: any, options: TimberOptions): Promise<void> {
   try{
-    if (!options.apiKey) {
+    if (!options?.apiKey) {
       console.error('Missing API Key for logging.');
       return;
     }
-    if (!options.url) {
+    if (!options?.url) {
       console.error('Missing API url for logging.');
       return;
     }
@@ -111,11 +114,11 @@ async function sendLog(logObject: any, options: LoggerOptions): Promise<void> {
   }
 }
 
-function sendToConsol(logObject: any, options: LoggerOptions, skipFields: string[]): void {
+function sendToConsole(logObject: any, options: TimberOptions, skipFields: string[]): void {
   try {
     let messageColor = '';
     let resetColor = '';
-    if (options.colorConsole === undefined || !!options.colorConsole) {
+    if (options?.colorConsole === undefined || !!options?.colorConsole) {
       messageColor = colorMap[logObject.level] || colors.default;
       resetColor = colors.default;
     }
@@ -127,7 +130,7 @@ function sendToConsol(logObject: any, options: LoggerOptions, skipFields: string
     }
     let consoleLog = `${messageColor}${message}${resetColor}`;
     if (contextStr) consoleLog += `\n${indent(contextStr, false)}`;
-    console.log(consoleLog); // DO NOT CHANGE TO LOGGER!!!!!!
+    console.log(consoleLog); // DO NOT CHANGE TO TIMBER!!!!!!
   } catch(e) {
     console.error(`Failed to log to console`)
   }
