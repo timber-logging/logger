@@ -55,35 +55,35 @@ export class Logger implements TimberLogger {
 
   // Preprocess arguments before passing to pino.
   public info(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.info, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'info', ...args);
   }
   public trace(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.trace, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'trace', ...args);
   }
 
   // You would repeat this pattern for warn, error, fatal, etc.
   public warn(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.warn, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'warn', ...args);
   }
   public warning(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.warn, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'warn', ...args);
   }
 
   public error(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.error, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'error', ...args);
   }
 
   public fatal(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.fatal, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'fatal', ...args);
   }
 
   // .log logs as info
   public log(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.info, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'info', ...args);
   }
   // custom level
   public notify(...args: TimberLogFnArgs): void {
-    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger.notify, ...args);
+    logFunction(this.timberOptions.usePinoFormat, this.pinoLogger, 'notify', ...args);
   }
 
   public reload(options: TimberOptions = {}) {
@@ -99,12 +99,18 @@ export class Logger implements TimberLogger {
   }
 }
 
-function logFunction(usePinoFormat: boolean | undefined, pinoLogFn: Function | undefined, ...args: any[]) {
+function logFunction(
+  usePinoFormat: boolean | undefined,
+  pinoLogger: CustomPinoLogger, // the pino instance. Needs to be done like this so that "this" context works within pino
+  logMethod: keyof pino.Logger | 'notify' ,
+  ...args: any[]
+) {
+  const pinoLogFn = pinoLogger[logMethod] as Function | undefined;
   if (!pinoLogFn) return;
 
   // if usePinoFormat=true then we just pass through to pino
   if (usePinoFormat) {
-    pinoLogFn(...args);
+    pinoLogFn.apply(pinoLogger, args); // done so that "this" context works within pino
     return;
   }
 
@@ -112,7 +118,7 @@ function logFunction(usePinoFormat: boolean | undefined, pinoLogFn: Function | u
   if (!args?.length) return;
   // if there is just 1 arg, just send it to pino
   if (args.length === 1) {
-    pinoLogFn(...args);
+    pinoLogFn.apply(pinoLogger, args); // done so that "this" context works within pino
     return;
   }
 
@@ -120,18 +126,22 @@ function logFunction(usePinoFormat: boolean | undefined, pinoLogFn: Function | u
   // this works if using the pino format with printf-style without setting usePinoFormat 
   if (typeof args[0] === 'string' && typeof args[1] === 'object') {
     const restOfArgs = args.slice(2);
-    pinoLogFn(args[1], args[0], ...restOfArgs);
+    const fnArgs = [args[1], args[0], ...restOfArgs];
+    pinoLogFn.apply(pinoLogger, fnArgs); // done so that "this" context works within pino
     return;
   }
   if (typeof args[0] === 'object' && typeof args[1] === 'string') {
     const restOfArgs = args.slice(2);
-    pinoLogFn(args[0], args[1], ...restOfArgs);
+    const fnArgs = [args[0], args[1], ...restOfArgs];
+    pinoLogFn.apply(pinoLogger, fnArgs); // done so that "this" context works within pino
     return;
   }
   // if first one is undefined, just remove it and log the rest
-  if (typeof args[0] === undefined) {
+  if (args[0] === undefined) {
     const restOfArgs = args.slice(1);
-    pinoLogFn(...restOfArgs);
+    const fnArgs = [...restOfArgs];
+    if (fnArgs.length === 0) return;
+    pinoLogFn.apply(pinoLogger, fnArgs); // done so that "this" context works within pino
     return;
   }
 
@@ -139,5 +149,6 @@ function logFunction(usePinoFormat: boolean | undefined, pinoLogFn: Function | u
   // if (args.length > 2) { // eg multiple strings, just concatenate
   // if (typeof args[0] === 'string' && typeof args[1] === 'string') {
   // if (typeof args[0] === 'object' && typeof args[1] === 'object') {
-  pinoLogFn(args.join(' '));
+  const fnArgs = [args.join(' ')];
+  pinoLogFn.apply(pinoLogger, fnArgs); // done so that "this" context works within pino
 }
