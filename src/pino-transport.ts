@@ -142,10 +142,11 @@ function getContextAsString(logObject: any, skipFields: string[]): string {
   // Separate Pino fields from custom fields
   return Object.keys(logObject).reduce((str, key) => {
     if (skipFields.includes(key)) return str;
+    if (logObject[key] === undefined || logObject[key] === null || logObject[key] === '') return str;
 
     let keyValueStr = `${key}: ${indent(getValueAsString(logObject[key]), true)}`;
     if (!str) return keyValueStr;
-    return `\n${keyValueStr}`;
+    return `${str}\n${keyValueStr}`;
   }, '');
 }
 

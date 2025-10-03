@@ -39,7 +39,7 @@ You can configure the logger by passing an options object when instantiating the
 - `logToTimber` (boolean): Enable/disable logging to an external service (default: true).
 - `logToConsole` (boolean): Enable/disable logging to the console (default: true).
 - `color` (boolean): Enable/disable colored console output (default: true).
-- `staticLogValues` (object): Static values that will be included in every log sent to Timber Logging.
+- `staticLogValues` (object): Static values that will be included in every log sent to Timber Logging. Examples would be for the project, environment etc
 
 ### Example
 
@@ -82,6 +82,7 @@ The logger instance supports all standard Pino logger methods like:
 - `logger.warn(message: string, ...args: any[])`
 - `logger.debug(message: string, ...args: any[])`
 - `logger.log()` is the same as calling logger.info()
+- `logger.warning()` is the same as calling logger.warn()
 
 It also supports a custom level for 'notify' which you can setup alerts for
 - `logger.notify(message: string, ...args: any[])`
