@@ -6,6 +6,10 @@
   "types": "dist/index.d.ts",
   "author": "Peripat Pty Ltd",
   "license": "MIT",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },
