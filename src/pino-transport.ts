@@ -28,7 +28,8 @@ const colorMap: Record<number, string> = {
 };
 
 export interface TimberOptions {
-  apiKey?: string;
+  apiKey?: string; // optional if TIMBER_API_KEY is set as env variable
+  timberId?: string; // optional if TIMBER_ID is set as env variable
   url?: string;
   logToTimber?: boolean;
   logToConsole?: boolean;
@@ -79,24 +80,33 @@ export const pinoHttpTransport = (options: TimberOptions = {}) => {
 
 async function sendLog(logObject: any, options: TimberOptions): Promise<void> {
   try{
-    if (!options?.apiKey) {
+    const apiKey = options?.apiKey || process?.env?.TIMBER_API_KEY;
+    if (!apiKey) {
       console.error('Missing API Key for logging.');
       return;
     }
-    if (!options?.url) {
-      console.error('Missing API url for logging.');
+
+    const timberId = options?.timberId || process?.env?.TIMBER_ID;
+    if (!timberId) {
+      console.error('Missing Timber ID for logging.');
+      return;
+    }
+
+    const url = options?.url || 'https://app.timberlogging.co/api/add-log';
+    if (!url) {
+      console.error('Missing API url for Timber Logging');
       return;
     }
 
     logsInProgress += 1; // Increment logs in progress
 
     const body = JSON.stringify(logObject);
-    const url = options.url;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Basic ${options.apiKey}`,
+        Authorization: `Basic ${apiKey}`,
+        'Timber-ID': timberId,
       },
       body,
     });
@@ -168,7 +178,7 @@ function indent(str: string, skipFirstRow = false): string {
 }
 
 /**
- * Returns a promise so the program sleeps for the number of miliseconds
+ * Returns a promise so the program sleeps for the number of milliseconds
  * @param {number} milliseconds
  * @returns {Promise}
  */
