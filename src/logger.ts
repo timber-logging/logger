@@ -95,6 +95,8 @@ export class Logger implements TimberLogger {
   }
 
   public async waitToFinish(maxWaitMs: number) {
+    // Force Pino to push its internal buffer down into your pinoHttpTransport stream
+    this.pinoLogger.flush(); 
     return waitForLogsToFinish(maxWaitMs);
   }
 }

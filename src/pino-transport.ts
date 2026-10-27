@@ -4,7 +4,9 @@ import { Level } from 'pino';
 
 class LogEmitter extends EventEmitter {}
 const logEmitter = new LogEmitter();
-let logsInProgress: number = 0;
+
+// The active promises not sent
+const activeLogPromises = new Set<Promise<void>>();
 
 const colors = {
   default: '\x1b[0m',
@@ -40,14 +42,13 @@ export interface TimberOptions {
 }
 
 // Function to wait for all logs to finish
-export async function waitForLogsToFinish(maxWaitTime = 250) {
+export async function waitForLogsToFinish(maxWaitTime = 5000) {
   // If no logs are in progress, resolve immediately
-  if (logsInProgress <= 0) return;
+  if (activeLogPromises.size === 0) return;
 
   // Wait until all logs are done
-  let timberPromise = new Promise((resolve) => logEmitter.once('timberComplete', resolve));
-
-  await Promise.race([timberPromise, sleep(maxWaitTime)])
+  const allDone = Promise.allSettled([...activeLogPromises]);
+  await Promise.race([allDone, sleep(maxWaitTime)]);
 }
 
 export const pinoHttpTransport = (options: TimberOptions = {}) => {
@@ -59,7 +60,7 @@ export const pinoHttpTransport = (options: TimberOptions = {}) => {
 
   return new Writable({
     objectMode: true,
-    async write(logObject: any, encoding, callback) {
+    write(logObject: any, encoding, callback) {
       let object = logObject;
       try {
         if (typeof logObject === 'string') object = JSON.parse(logObject);
@@ -67,8 +68,20 @@ export const pinoHttpTransport = (options: TimberOptions = {}) => {
         // Ignore JSON parse errors
       }
       try {
-        if (logToConsole === undefined || !!logToConsole) sendToConsole(object, options, skipFields);
-        if (logToTimber === undefined || !!logToTimber) await sendLog(object, options);
+        if (logToConsole === undefined || !!logToConsole) {
+          sendToConsole(object, options, skipFields);
+        }
+        if (logToTimber === undefined || !!logToTimber) {
+          const logPromise = sendLog(object, options);
+          activeLogPromises.add(logPromise);
+
+          // Remove the promise from tracking once it finishes safely
+          logPromise.finally(() => {
+            activeLogPromises.delete(logPromise);
+          });
+        }
+
+        // release stream queue so the next log can proceed
         callback();
       } catch (error: any) {
         console.error('Error transporting log:', error);
@@ -98,8 +111,6 @@ async function sendLog(logObject: any, options: TimberOptions): Promise<void> {
       return;
     }
 
-    logsInProgress += 1; // Increment logs in progress
-
     const body = JSON.stringify(logObject);
     const response = await fetch(url, {
       method: 'POST',
@@ -116,11 +127,6 @@ async function sendLog(logObject: any, options: TimberOptions): Promise<void> {
     }
   } catch(e: any) {
     console.error('Error transporting log to timber:', e.message);
-  } finally {
-    logsInProgress -= 1; // Decrement logs in progress after log is sent
-
-    // If no more logs are in progress, emit 'timberComplete'
-    if (logsInProgress <= 0) logEmitter.emit('timberComplete');
   }
 }
 

@@ -122,7 +122,7 @@ When you send logs to Timber, some fields are indexed so they can be filtered. N
 | :--- | :--- |
 | **message** | `msg`, `description`, `text`, `str`, `error` |
 | **level** | `severity` |
-| **project** | — |
+| **project** | `source` |
 | **host** | `hostname` |
 | **url** | `path`, `pathname`, `address` |
 | **method** | `httpMethod` |
@@ -184,9 +184,12 @@ To stop this from happening, add `await timber.waitToFinish()` before your funct
 
 This gives the application enough time to send the log to timber, but it doesn't wait for the response from sending the log to timber as this would slow down the responses to your users.
 
+If you are hosted on Vercel and using App Router, you can use `waitUntil` shown below and the response will not be delayed, and the logs will send in the background.
+
 ```js
 // Eg within a NextJs route.js or ts file
 
+import { waitUntil } from '@vercel/functions'; // if you are hosting on vercel
 export async function GET(req) {
   let session;
   try {
@@ -198,11 +201,11 @@ export async function GET(req) {
 
     let data = await getSomeData(session);
 
-    await timber.waitToFinish(); // only waits if a log is being sent
+    waitUntil(timber.waitToFinish()); // if not hosting on vercel use 'await timber.waitToFinish();' instead
     return new Response(JSON.stringify({ ...data }));
   } catch (e) {
     timber.error(e.message, { url: req.url, user: session?.userId, err: e });
-    await timber.waitToFinish(); // only waits if a log is being sent
+    waitUntil(timber.waitToFinish()); // if not hosting on vercel use 'await timber.waitToFinish();' instead
     const error = `An error occurred. Please try again`;
     return new Response(JSON.stringify({ error }), { status: 500 });
   }
@@ -221,6 +224,7 @@ This gives you all the information to investigate any issues without clearfellin
 ````js
 // Eg within a NextJs route.js or ts file
 
+import { waitUntil } from '@vercel/functions'; // if you are hosting on vercel
 export async function POST(req) {
   let session;
   let body;
@@ -242,11 +246,12 @@ export async function POST(req) {
     }
     // if your serverless function terminates after the response, use this to
     // ensure logs are sent before the response is provided and function terminated
-    await timber.waitToFinish(); 
+    waitUntil(timber.waitToFinish()); // if not hosting on vercel use 'await timber.waitToFinish();' instead
+     
     return new Response(JSON.stringify({ ...data }));
   } catch (e) {
     timber.error(e.message, { url: req.url, user: session?.userId, err: e, body });
-    await timber.waitToFinish();
+    waitUntil(timber.waitToFinish()); // if not hosting on vercel use 'await timber.waitToFinish();' instead
     const error = `An error occurred. Please try again`;
     return new Response(JSON.stringify({ error }), { status: 500 });
   }
